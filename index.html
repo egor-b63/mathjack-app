@@ -2,136 +2,275 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MathJack Mini App</title>
-    <!-- Подключаем Telegram WebApp, Chart.js и Math.js -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>MathJack Desmos Engine</title>
+    <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <!-- D3.js + FunctionPlot -->
+    <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+    <script src="https://unpkg.com/function-plot@1/dist/function-plot.js"></script>
+    
     <style>
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #ffffff);
+            --text-color: var(--tg-theme-text-color, #1c1c1e);
+            --btn-color: var(--tg-theme-button-color, #007aff);
+            --btn-text: var(--tg-theme-button-text-color, #ffffff);
+            --card-bg: var(--tg-theme-secondary-bg-color, #f2f2f7);
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: var(--tg-theme-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #000000);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             margin: 0;
-            padding: 16px;
+            padding: 12px;
             box-sizing: border-box;
+            user-select: none;
         }
-        h2 { text-align: center; margin-top: 0; }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-size: 14px; }
-        input {
-            width: 100%; padding: 10px; border: 1px solid #ccc;
-            border-radius: 8px; box-sizing: border-box;
-            background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            color: var(--tg-theme-text-color, #000000);
+
+        h3 { margin: 0 0 12px 0; text-align: center; font-size: 18px; }
+
+        .equations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 12px;
         }
+
+        .eq-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            background: var(--card-bg);
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .eq-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .color-badge {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        select, input.eq-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #ffffff;
+            color: #000000;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        input.eq-input {
+            font-family: monospace;
+            font-size: 15px;
+        }
+
+        .btn-remove {
+            background: none;
+            border: none;
+            color: #ff3b30;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+
+        .controls-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
         button {
-            width: 100%; padding: 12px; margin-top: 10px;
-            background-color: var(--tg-theme-button-color, #0088cc);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            border: none; border-radius: 8px;
-            font-weight: bold; font-size: 16px; cursor: pointer;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--btn-color);
+            color: var(--btn-text);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s;
         }
-        canvas { margin-top: 20px; max-width: 100%; }
+
+        button:active { opacity: 0.8; }
+        .btn-add { background-color: #34c759; }
+        .btn-send { background-color: #5856d6; grid-column: span 2; }
+
+        #plot-container {
+            width: 100%;
+            height: 350px;
+            background: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
     </style>
 </head>
 <body>
-    <h2>MathJack Engine</h2>
-    <p>Привет, <b id="user-name">Пользователь</b>!</p>
 
-    <div class="input-group">
-        <label for="math-expr">Введи выражение (например, x^2 - 4 или sin(x)):</label>
-        <input type="text" id="math-expr" value="x^2">
+    <h3>MathJack Grapher 📈</h3>
+
+    <div class="equations-list" id="eqList"></div>
+
+    <div class="controls-panel">
+        <button class="btn-add" id="addEqBtn">+ Добавить функцию</button>
+        <button id="renderBtn">🔄 Обновить график</button>
+        <button class="btn-send" id="sendDataBtn">📤 Отправить аналитику боту</button>
     </div>
 
-    <button id="plot-btn">Построить график в App</button>
-    <button id="send-btn" style="background-color: #28a745;">Отправить аналитику в бот</button>
-
-    <canvas id="chartCanvas"></canvas>
+    <div id="plot-container"></div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.expand(); 
+        tg.expand();
 
-        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            document.getElementById('user-name').innerText = tg.initDataUnsafe.user.first_name;
+        const COLORS = ['#007aff', '#ff3b30', '#34c759', '#af52de', '#ff9500', '#5856d6'];
+
+        // Готовый каталог пресетов функций
+        const PRESETS = [
+            { name: "--- Выберите из списка ---", value: "custom" },
+            { name: "Синусоида: sin(x)", value: "sin(x)" },
+            { name: "Косинусоида: cos(x)", value: "cos(x)" },
+            { name: "Парабола: x^2 - 4", value: "x^2 - 4" },
+            { name: "Кубическая парабола: x^3", value: "x^3" },
+            { name: "Прямая (Линейная): 2*x + 1", value: "2*x + 1" },
+            { name: "Гипербола: 1/x", value: "1/x" },
+            { name: "Модуль: abs(x)", value: "abs(x)" },
+            { name: "Корень: sqrt(x)", value: "sqrt(x)" },
+            { name: "Экспонента: exp(x)", value: "exp(x)" },
+            { name: "Затухающие колебания: exp(-0.2*x)*sin(2*x)", value: "exp(-0.2*x)*sin(2*x)" }
+        ];
+
+        let equations = [
+            { id: 1, fn: 'x^2 - 4', color: COLORS[0] },
+            { id: 2, fn: 'sin(x)', color: COLORS[1] }
+        ];
+
+        function renderInputs() {
+            const container = document.getElementById('eqList');
+            container.innerHTML = '';
+
+            equations.forEach((eq, index) => {
+                const row = document.createElement('div');
+                row.className = 'eq-row';
+
+                // Генерируем опции для select
+                const optionsHTML = PRESETS.map(p => 
+                    `<option value="${p.value}" ${p.value === eq.fn ? 'selected' : ''}>${p.name}</option>`
+                ).join('');
+
+                row.innerHTML = `
+                    <div class="eq-header">
+                        <div class="color-badge" style="background-color: ${eq.color};"></div>
+                        <span style="font-size: 14px; font-weight: bold;">Функция #${index + 1}</span>
+                        ${equations.length > 1 ? `<button class="btn-remove" data-index="${index}">✕</button>` : ''}
+                    </div>
+                    <select class="eq-select" data-index="${index}">
+                        ${optionsHTML}
+                    </select>
+                    <input type="text" class="eq-input" value="${eq.fn}" data-index="${index}" placeholder="Формула...">
+                `;
+                container.appendChild(row);
+            });
+
+            // События выбора из меню
+            document.querySelectorAll('.eq-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const idx = e.target.dataset.index;
+                    if (e.target.value !== 'custom') {
+                        equations[idx].fn = e.target.value;
+                        // Синхронизируем текстовое поле ввода
+                        document.querySelectorAll('.eq-input')[idx].value = e.target.value;
+                        drawDesmosPlot();
+                    }
+                });
+            });
+
+            // События прямого редактирования текста
+            document.querySelectorAll('.eq-input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = e.target.dataset.index;
+                    equations[idx].fn = e.target.value;
+                    drawDesmosPlot();
+                });
+            });
+
+            // Удаление строки
+            document.querySelectorAll('.btn-remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = e.target.dataset.index;
+                    equations.splice(idx, 1);
+                    renderInputs();
+                    drawDesmosPlot();
+                });
+            });
         }
 
-        let chartInstance = null;
+        function drawDesmosPlot() {
+            const container = document.getElementById('plot-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
 
-        function drawChart(expr) {
-            const labels = [];
-            const dataPoints = [];
+            const data = equations.map(eq => ({
+                fn: eq.fn.replace(/(\d)(x)/g, '$1*$2'),
+                color: eq.color,
+                graphType: 'polyline'
+            }));
 
             try {
-                // Компилируем выражение один раз через Math.js для высокой скорости
-                const compiledExpr = math.compile(expr);
-
-                // Расширяем диапазон и делаем более частый шаг для гладкости парабол и кривых
-                for (let x = -10; x <= 10; x += 0.2) {
-                    labels.push(x.toFixed(1));
-                    try {
-                        let y = compiledExpr.evaluate({ x: x });
-                        
-                        // Игнорируем комплексные числа и бесконечности (например, деление на 0)
-                        if (typeof y === 'number' && isFinite(y)) {
-                            dataPoints.push(y);
-                        } else {
-                            dataPoints.push(null);
-                        }
-                    } catch (e) {
-                        dataPoints.push(null);
-                    }
-                }
-            } catch (e) {
-                console.error("Ошибка парсинга формулы:", e);
+                functionPlot({
+                    target: '#plot-container',
+                    width: width,
+                    height: height,
+                    grid: true,
+                    xAxis: { domain: [-6, 6] },
+                    yAxis: { domain: [-6, 6] },
+                    data: data
+                });
+            } catch (err) {
+                console.error("Ошибка формулы:", err);
             }
-
-            const ctx = document.getElementById('chartCanvas').getContext('2d');
-            if (chartInstance) chartInstance.destroy();
-
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: `y = ${expr}`,
-                        data: dataPoints,
-                        borderColor: '#0088cc',
-                        borderWidth: 2,
-                        pointRadius: 0, // Убираем точки на линии, чтобы график был гладким
-                        fill: false
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        x: {
-                            display: true,
-                            title: { display: true, text: 'X' }
-                        },
-                        y: {
-                            display: true,
-                            title: { display: true, text: 'Y' }
-                        }
-                    }
-                }
-            });
         }
 
+        document.getElementById('addEqBtn').addEventListener('click', () => {
+            if (equations.length < 5) {
+                const newColor = COLORS[equations.length % COLORS.length];
+                equations.push({ id: Date.now(), fn: '2*x + 1', color: newColor });
+                renderInputs();
+                drawDesmosPlot();
+            }
+        });
+
+        document.getElementById('renderBtn').addEventListener('click', drawDesmosPlot);
+
+        document.getElementById('sendDataBtn').addEventListener('click', () => {
+            const validEqs = equations.map(e => e.fn).filter(fn => fn.trim() !== '');
+            tg.sendData(JSON.stringify({ 
+                expressions: validEqs,
+                type: 'multi_graph'
+            }));
+        });
+
         window.onload = () => {
-            document.getElementById('plot-btn').addEventListener('click', () => {
-                drawChart(document.getElementById('math-expr').value);
-            });
-
-            document.getElementById('send-btn').addEventListener('click', () => {
-                tg.sendData(JSON.stringify({ expression: document.getElementById('math-expr').value }));
-            });
-
-            // По умолчанию при открытии строим параболу y = x^2
-            drawChart('x^2');
+            renderInputs();
+            drawDesmosPlot();
         };
+
+        window.addEventListener('resize', drawDesmosPlot);
     </script>
 </body>
 </html>
