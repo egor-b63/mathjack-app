@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MathJack Mini App</title>
+    <!-- Подключаем Telegram WebApp, Chart.js и Math.js -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -39,12 +41,12 @@
     <p>Привет, <b id="user-name">Пользователь</b>!</p>
 
     <div class="input-group">
-        <label for="math-expr">Введи выражение (например, sin(x)):</label>
-        <input type="text" id="math-expr" value="sin(x)">
+        <label for="math-expr">Введи выражение (например, x^2 - 4 или sin(x)):</label>
+        <input type="text" id="math-expr" value="x^2">
     </div>
 
     <button id="plot-btn">Построить график в App</button>
-    <button id="send-btn" style="background-color: #28a745;">Отправить результат в бот</button>
+    <button id="send-btn" style="background-color: #28a745;">Отправить аналитику в бот</button>
 
     <canvas id="chartCanvas"></canvas>
 
@@ -62,14 +64,28 @@
             const labels = [];
             const dataPoints = [];
 
-            for (let x = -10; x <= 10; x += 0.5) {
-                labels.push(x.toFixed(1));
-                try {
-                    let y = eval(expr.replace(/x/g, `(${x})`).replace(/sin/g, 'Math.sin').replace(/cos/g, 'Math.cos'));
-                    dataPoints.push(y);
-                } catch (e) {
-                    dataPoints.push(null);
+            try {
+                // Компилируем выражение один раз через Math.js для высокой скорости
+                const compiledExpr = math.compile(expr);
+
+                // Расширяем диапазон и делаем более частый шаг для гладкости парабол и кривых
+                for (let x = -10; x <= 10; x += 0.2) {
+                    labels.push(x.toFixed(1));
+                    try {
+                        let y = compiledExpr.evaluate({ x: x });
+                        
+                        // Игнорируем комплексные числа и бесконечности (например, деление на 0)
+                        if (typeof y === 'number' && isFinite(y)) {
+                            dataPoints.push(y);
+                        } else {
+                            dataPoints.push(null);
+                        }
+                    } catch (e) {
+                        dataPoints.push(null);
+                    }
                 }
+            } catch (e) {
+                console.error("Ошибка парсинга формулы:", e);
             }
 
             const ctx = document.getElementById('chartCanvas').getContext('2d');
@@ -84,13 +100,26 @@
                         data: dataPoints,
                         borderColor: '#0088cc',
                         borderWidth: 2,
+                        pointRadius: 0, // Убираем точки на линии, чтобы график был гладким
                         fill: false
                     }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            display: true,
+                            title: { display: true, text: 'X' }
+                        },
+                        y: {
+                            display: true,
+                            title: { display: true, text: 'Y' }
+                        }
+                    }
                 }
             });
         }
 
-        // Ждем полной загрузки страницы и библиотек перед отрисовкой
         window.onload = () => {
             document.getElementById('plot-btn').addEventListener('click', () => {
                 drawChart(document.getElementById('math-expr').value);
@@ -100,7 +129,8 @@
                 tg.sendData(JSON.stringify({ expression: document.getElementById('math-expr').value }));
             });
 
-            drawChart('sin(x)');
+            // По умолчанию при открытии строим параболу y = x^2
+            drawChart('x^2');
         };
     </script>
 </body>
