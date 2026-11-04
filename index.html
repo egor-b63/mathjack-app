@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MathJack Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            margin: 0;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+        h2 { text-align: center; margin-top: 0; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 14px; }
+        input {
+            width: 100%; padding: 10px; border: 1px solid #ccc;
+            border-radius: 8px; box-sizing: border-box;
+            background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            color: var(--tg-theme-text-color, #000000);
+        }
+        button {
+            width: 100%; padding: 12px; margin-top: 10px;
+            background-color: var(--tg-theme-button-color, #0088cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none; border-radius: 8px;
+            font-weight: bold; font-size: 16px; cursor: pointer;
+        }
+        canvas { margin-top: 20px; max-width: 100%; }
+    </style>
+</head>
+<body>
+    <h2>MathJack Engine</h2>
+    <p>Привет, <b id="user-name">Пользователь</b>!</p>
+
+    <div class="input-group">
+        <label for="math-expr">Введи выражение (например, sin(x)):</label>
+        <input type="text" id="math-expr" value="sin(x)">
+    </div>
+
+    <button id="plot-btn">Построить график в App</button>
+    <button id="send-btn" style="background-color: #28a745;">Отправить результат в бот</button>
+
+    <canvas id="chartCanvas"></canvas>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand(); 
+
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            document.getElementById('user-name').innerText = tg.initDataUnsafe.user.first_name;
+        }
+
+        let chartInstance = null;
+
+        function drawChart(expr) {
+            const labels = [];
+            const dataPoints = [];
+
+            for (let x = -10; x <= 10; x += 0.5) {
+                labels.push(x.toFixed(1));
+                try {
+                    let y = eval(expr.replace(/x/g, `(${x})`).replace(/sin/g, 'Math.sin').replace(/cos/g, 'Math.cos'));
+                    dataPoints.push(y);
+                } catch (e) {
+                    dataPoints.push(null);
+                }
+            }
+
+            const ctx = document.getElementById('chartCanvas').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `y = ${expr}`,
+                        data: dataPoints,
+                        borderColor: '#0088cc',
+                        borderWidth: 2,
+                        fill: false
+                    }]
+                }
+            });
+        }
+
+        // Ждем полной загрузки страницы и библиотек перед отрисовкой
+        window.onload = () => {
+            document.getElementById('plot-btn').addEventListener('click', () => {
+                drawChart(document.getElementById('math-expr').value);
+            });
+
+            document.getElementById('send-btn').addEventListener('click', () => {
+                tg.sendData(JSON.stringify({ expression: document.getElementById('math-expr').value }));
+            });
+
+            drawChart('sin(x)');
+        };
+    </script>
+</body>
+</html>
